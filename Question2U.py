@@ -164,3 +164,192 @@ df_clean[cols_to_see].head(15)
 
 ##################################################
 #<<<<<<<<<<<<<<<< End of Section >>>>>>>>>>>>>>>>#
+#%%
+
+
+##########################################
+## Exploratory Data Analysis (EDA)      ##
+##########################################
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set(style="whitegrid")
+
+
+###############
+## Overview  ##
+###############
+
+# Total number of crimes
+df_clean.shape[0]
+
+
+######################################
+## Crime Frequency (Top Crime Types)##
+######################################
+
+# Table of top 10 crimes
+df_clean["Crm Cd Desc"].value_counts().head(10)
+
+# Plot top 10 crimes
+top10 = df_clean["Crm Cd Desc"].value_counts().head(10)
+plt.figure(figsize=(10, 6))
+sns.barplot(x=top10.values, y=top10.index)
+plt.xlabel("Number of Incidents")
+plt.ylabel("Crime Type")
+plt.title("Top 10 Most Frequent Crime Types in 2024")
+plt.tight_layout()
+plt.show()
+
+
+#################################
+## Crime by Day of the Week    ##
+#################################
+
+order_days = ["Monday", "Tuesday", "Wednesday", "Thursday",
+              "Friday", "Saturday", "Sunday"]
+
+# Table
+df_clean["DAY_OF_WEEK"].value_counts().reindex(order_days)
+
+# Plot
+plt.figure(figsize=(8, 5))
+sns.countplot(data=df_clean, x="DAY_OF_WEEK", order=order_days)
+plt.xlabel("Day of Week")
+plt.ylabel("Number of Incidents")
+plt.title("Number of Crimes by Day of Week")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+
+##################################
+## Weekday vs Weekend Analysis  ##
+##################################
+
+# Table
+df_clean["IS_WEEKEND"].value_counts()
+
+# Plot
+weekday_weekend = df_clean["IS_WEEKEND"].map({0: "Weekday", 1: "Weekend"})
+plt.figure(figsize=(6, 4))
+sns.countplot(x=weekday_weekend)
+plt.xlabel("Day Type")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes on Weekdays vs Weekends")
+plt.tight_layout()
+plt.show()
+
+
+##################################
+## Crime by Hour of the Day     ##
+##################################
+
+# Table
+df_clean["HOUR"].value_counts().sort_index()
+
+# Plot
+plt.figure(figsize=(10, 5))
+sns.countplot(data=df_clean, x="HOUR")
+plt.xlabel("Hour of Day (0–23)")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes by Hour of Day")
+plt.tight_layout()
+plt.show()
+
+
+##########################################
+## Crime by Time-of-Day Category       ##
+##########################################
+
+# Table
+df_clean["TIME_OF_DAY"].value_counts()
+
+# Plot
+order_tod = ["Night", "Morning", "Afternoon", "Evening"]
+plt.figure(figsize=(7, 4))
+sns.countplot(data=df_clean, x="TIME_OF_DAY", order=order_tod)
+plt.xlabel("Time of Day")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes by Time of Day")
+plt.tight_layout()
+plt.show()
+
+
+############################
+## Crime by Month         ##
+############################
+
+order_months = ["January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"]
+
+# Table
+df_clean["MONTH_NAME"].value_counts().reindex(order_months)
+
+# Plot
+plt.figure(figsize=(10, 5))
+sns.countplot(data=df_clean, x="MONTH_NAME", order=order_months)
+plt.xlabel("Month")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes by Month in 2024")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+
+###############################
+## Crime by Season           ##
+###############################
+
+# Table
+df_clean["SEASON"].value_counts()
+
+# Plot
+order_seasons = ["Winter", "Spring", "Summer", "Fall"]
+plt.figure(figsize=(6, 4))
+sns.countplot(data=df_clean, x="SEASON", order=order_seasons)
+plt.xlabel("Season")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes by Season in 2024")
+plt.tight_layout()
+plt.show()
+
+
+####################################
+## Holiday vs Non-Holiday Crimes ##
+####################################
+
+# Table
+df_clean["IS_HOLIDAY"].value_counts()
+
+# Plot
+holiday_labels = df_clean["IS_HOLIDAY"].map({0: "Non-Holiday", 1: "Holiday"})
+plt.figure(figsize=(6, 4))
+sns.countplot(x=holiday_labels)
+plt.xlabel("Day Type")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes on Holidays vs Non-Holidays")
+plt.tight_layout()
+plt.show()
+
+
+################################
+## Crime by LAPD Area         ##
+################################
+
+# Table
+df_clean["AREA NAME"].value_counts().head(10)
+
+# Plot
+area_counts = df_clean["AREA NAME"].value_counts().head(10)
+plt.figure(figsize=(10, 6))
+sns.barplot(x=area_counts.values, y=area_counts.index)
+plt.xlabel("Number of Incidents")
+plt.ylabel("Area Name")
+plt.title("Top 10 LAPD Areas by Crime Count (2024)")
+plt.tight_layout()
+plt.show()
+
+##################################################
+#<<<<<<<<<<<<<<<< End of Section >>>>>>>>>>>>>>>>#
+# %%
