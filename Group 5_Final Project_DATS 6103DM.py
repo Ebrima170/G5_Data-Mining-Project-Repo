@@ -1,5 +1,5 @@
 #%%[markdown]
-#Team 5: Kadaru, Muhannad, Ebrima
+#Team 5: Harshith, Muhannad, Ebrima
 #Group 5 Project Work: 
 '''This project uses a dataset from LPAD on the crime rates in Los Angeles. 
 The original data set contains several years, but for the purpose of this project, we are focusing only on the data for 2024.
