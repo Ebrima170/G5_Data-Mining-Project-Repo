@@ -1,6 +1,11 @@
 #%%[markdown]
 #Team 5: Harshith, Muhannad, Ebrima
-#Group 5 Project Work: 
+
+#Topic: Analysis of the Crime Rate Incidents in Los Angeles: Focus on 2024 Data
+#Github Repo Link: https://github.com/Ebrima170/G5_Data-Mining-Project-Repo
+
+#%%[markdown]
+#1. CONTEXT AND DATASET DESCRIPTION
 '''This project uses a dataset from LPAD on the crime rates in Los Angeles. 
 The original data set contains several years, but for the purpose of this project, we are focusing only on the data for 2024.
 Description of the variables can be found on the word document.
@@ -20,7 +25,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, roc_auc_score
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import mean_squared_error, r2_score
+
 # Load dataset
 
 data = pd.read_excel('C:/Users/Ebrima/Documents/GitHub/G5_Data-Mining-Project-Repo/Crime_Data_LA_2024.xlsx')
@@ -192,7 +202,8 @@ for col in datetime_vars:
         plt.ylabel("Count")
         plt.tight_layout()
         plt.show() 
-        ''' 
+     '''  
+#EDA is commented out to avoid long plotting times 
 '''
 EDA plots show the distributions and trends of key variables. 
 While some variables have clear patterns, others may require further investigation.
@@ -268,149 +279,129 @@ from sklearn.model_selection import train_test_split
 # Predicting crime_count using victim & location characteristics
 # ============================================================
 
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 # ------------------------------------------------------------
-# 1. Compute crime intensity per area
-# ------------------------------------------------------------
-crime_intensity = (
+#
+# Aggregate crime intensity
+area_df = (
     data.groupby("area_name")
-        .size()
-        .reset_index(name="crime_count")
+        .agg(
+            crime_count = ("dr_no", "count"),      # total crimes
+            mean_victim_age = ("vict_age", "mean"),
+            pct_male_victims = ("vict_sex", lambda x: (x=='M').mean()),
+            pct_female_victims = ("vict_sex", lambda x: (x=='F').mean()),
+            mean_lat = ("lat", "mean"),
+            mean_lon = ("lon", "mean"),
+            unique_crime_types = ("crm_cd_desc", "nunique"),
+            unique_locations = ("location", "nunique")
+        )
+        .reset_index()
 )
 
-# ------------------------------------------------------------
-# 2. Merge back into main dataset
-# ------------------------------------------------------------
-model_data = data.merge(crime_intensity, on="area_name", how="left")
+# Drop any NAs that might occur
+area_df = area_df.dropna()
+print("\nArea-level Data for Modeling:")
+print(area_df.head())
+# Define X and y
+X = area_df.drop(columns=["crime_count", "area_name"])
+y = area_df["crime_count"]
 
-# ------------------------------------------------------------
-# 3. Select predictors & target
-# ------------------------------------------------------------
-features = [
-    "vict_age",
-    "lat",
-    "lon",
-    "vict_sex",
-    "location",
-    "premis_desc",
-    "crm_cd_desc"
-]
-
-X = model_data[features]
-y = model_data["crime_count"]
-
-# Drop rows with missing target or predictors
-model_data_clean = model_data.dropna(subset=features + ["crime_count"])
-
-X = model_data_clean[features]
-y = model_data_clean["crime_count"]
-
-# ------------------------------------------------------------
-# 4. Identify categorical & numeric columns
-# ------------------------------------------------------------
-numeric_features = ["vict_age", "lat", "lon"]
-categorical_features = ["vict_sex", "location", "premis_desc", "crm_cd_desc"]
-
-# ------------------------------------------------------------
-# 5. Preprocessing with One-Hot Encoding
-# ------------------------------------------------------------
-preprocess = ColumnTransformer(
-    transformers=[
-        ("num", "passthrough", numeric_features),
-        ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_features),
-    ]
-)
-
-# ------------------------------------------------------------
-# 6. Modeling pipeline — Random Forest Regressor
-# ------------------------------------------------------------
-rf_pipeline = Pipeline(steps=[
-    ("preprocess", preprocess),
-    ("rf", RandomForestRegressor(
-        n_estimators=150,
-        random_state=42,
-        n_jobs=-1
-    ))
-])
-
-# ------------------------------------------------------------
-# 7. Train-test split
-# ------------------------------------------------------------
+# Train-test split
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.25, random_state=42
 )
 
-# ------------------------------------------------------------
-# 8. Fit model
-# ------------------------------------------------------------
-rf_pipeline.fit(X_train, y_train)
+# Fit model
+rf = RandomForestRegressor(n_estimators=500, random_state=42)
+rf.fit(X_train, y_train)
 
-# ------------------------------------------------------------
-# 9. Predictions & Evaluation
-# ------------------------------------------------------------
-y_pred = rf_pipeline.predict(X_test)
+# Predict
+y_pred = rf.predict(X_test)
 
-mse = mean_squared_error(y_test, y_pred)
-rmse = np.sqrt(mse)
+# Performance
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
 r2 = r2_score(y_test, y_pred)
 
-print("\nMODEL PERFORMANCE (Crime Intensity Prediction)")
-print("------------------------------------------------")
+print("Model Performance (Area-Level)")
+print("----------------------------------------")
 print(f"RMSE: {rmse:.2f}")
-print(f"R² Score: {r2:.4f}")
+print(f"R² Score: {r2:.3f}")
 
-# ------------------------------------------------------------
-# 10. Feature Importance (from trained RF model)
-# ------------------------------------------------------------
-# Extract processed one-hot encoded feature names
-encoded_cat_cols = list(
-    rf_pipeline.named_steps["preprocess"]
-    .named_transformers_["cat"]
-    .get_feature_names_out(categorical_features)
-)
 
-all_feature_names = numeric_features + encoded_cat_cols
-
-importances = rf_pipeline.named_steps["rf"].feature_importances_
 importance_df = pd.DataFrame({
-    "feature": all_feature_names,
-    "importance": importances
-}).sort_values(by="importance", ascending=False)
+    "feature": X.columns,
+    "importance": rf.feature_importances_
+}).sort_values("importance", ascending=False)
 
-# Display top 15 most important features
-print("\nTop 15 Most Important Predictive Features")
-print(importance_df.head(15))
+print("\nFeature Importances:")
+print(importance_df)
 
-# ------------------------------------------------------------
-# 11. Plot feature importance
-# ------------------------------------------------------------
-plt.figure(figsize=(10, 8))
-sns.barplot(
-    data=importance_df.head(15),
-    x="importance",
-    y="feature"
-)
-plt.title("Top 15 Feature Importances for Crime Intensity Model")
+plt.figure(figsize=(10, 6))
+sns.barplot(data=importance_df, x="importance", y="feature")
+plt.title("Feature Importances for Area-Level Crime Intensity")
 plt.tight_layout()
 plt.show()
 
+# ============================================================
+#Harshith's Question
+# ============================================================
+# %%[markdown]
+ #3: Which crime types showed the sharpest increases or decreases in 2024?
+data['date_occ'] = pd.to_datetime(data['date_occ'], errors='coerce')
+data = data[data['date_occ'].notna()].copy()
+data['month'] = data['date_occ'].dt.month
+
+crime_monthly = (
+    data.groupby(['crm_cd_desc', 'month'])
+        .size()
+        .reset_index(name='count')
+)
+
+top_crimes = (
+    data['crm_cd_desc']
+        .value_counts()
+        .head(10)
+        .index
+)
+
+crime_monthly_top = crime_monthly[crime_monthly['crm_cd_desc'].isin(top_crimes)]
+
+plt.figure(figsize=(14, 8))
+sns.lineplot(
+    data=crime_monthly_top,
+    x='month',
+    y='count',
+    hue='crm_cd_desc',
+    marker='o'
+)
+plt.xticks(range(1, 13))
+plt.xlabel('Month')
+plt.ylabel('Number of crimes')
+plt.title('Monthly Crime Trends for Top 10 Crime Categories in 2024')
+plt.legend(title='Crime Type', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
+
+trend_pivot = crime_monthly.pivot(index='crm_cd_desc', columns='month', values='count').fillna(0)
+
+if 1 in trend_pivot.columns and 12 in trend_pivot.columns:
+    trend_pivot['trend'] = trend_pivot[12] - trend_pivot[1]
+else:
+    first_col = trend_pivot.columns.min()
+    last_col = trend_pivot.columns.max()
+    trend_pivot['trend'] = trend_pivot[last_col] - trend_pivot[first_col]
+
+rising = trend_pivot.sort_values('trend', ascending=False).head(10)
+falling = trend_pivot.sort_values('trend', ascending=True).head(10)
+
+print("Top 10 rising crime types (change from start to end of year):")
+print(rising['trend'])
+
+print("\nTop 10 declining crime types (change from start to end of year):")
+print(falling['trend'])
+#=============
+
+print(data.head())
+print(data.info())
 
 
 
-'''
-
-'''
-
-
-
-# %%
