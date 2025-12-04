@@ -76,6 +76,9 @@ lat_min, lat_max, lon_min, lon_max
 bad_geo_mask = (df_clean["LAT"] == 0.0) | (df_clean["LON"] == 0.0)
 df_clean = df_clean[~bad_geo_mask]
 
+# Filter to keep only crimes that occurred in 2024
+df_clean = df_clean[df_clean["DATE OCC"].dt.year == 2024]
+#df_clean.shape
 
 # Count duplicate DR_NO values
 df_clean["DR_NO"].duplicated().sum()
@@ -352,4 +355,112 @@ plt.show()
 
 ##################################################
 #<<<<<<<<<<<<<<<< End of Section >>>>>>>>>>>>>>>>#
-# %%
+
+#%%
+##############################################
+## Statistical Testing: Weekday vs Weekend  ##
+##############################################
+
+import pandas as pd
+import numpy as np
+from scipy import stats
+
+###############################################################
+## Normalize crime counts: compare “per day” instead of totals
+###############################################################
+# Raw totals are misleading because 2024 had many more weekdays (262)
+# than weekends (104). Therefore, we compute average crimes per day
+# in each group.
+
+# Step 1 — Total crimes on weekdays and weekends
+weekday_total = df_clean[df_clean["IS_WEEKEND"] == 0].shape[0]
+weekend_total = df_clean[df_clean["IS_WEEKEND"] == 1].shape[0]
+
+# Step 2 — Count number of weekday vs weekend days in 2024
+days_2024 = pd.date_range("2024-01-01", "2024-12-31")
+num_weekdays = sum(days_2024.weekday < 5)        # Mon–Fri
+num_weekend_days = sum(days_2024.weekday >= 5)   # Sat–Sun
+
+# Step 3 — Compute average crimes per *calendar day*
+weekday_avg = weekday_total / num_weekdays
+weekend_avg = weekend_total / num_weekend_days
+
+print("Average crimes per weekday:", weekday_avg)
+print("Average crimes per weekend day:", weekend_avg)
+
+'''
+Interpretation:
+---------------
+Even though total crimes are higher on weekdays, this is because
+there are more weekday days in the calendar.
+
+After normalizing (crimes per day), both averages are almost identical:
+• Weekday ≈ 348.31
+• Weekend ≈ 348.44
+
+This suggests *daily* crime levels do NOT differ meaningfully
+between weekdays and weekends.
+'''
+
+#########################################################
+## Build Daily Samples for Proper Statistical Testing  ##
+#########################################################
+
+# Step 4 — For each date in 2024, count how many crimes occurred
+daily_counts = df_clean.groupby(df_clean["DATE OCC"].dt.date).size()
+
+# Step 5 — Split into weekday and weekend samples
+weekday_sample = daily_counts[pd.to_datetime(daily_counts.index).weekday < 5]
+weekend_sample = daily_counts[pd.to_datetime(daily_counts.index).weekday >= 5]
+
+print("Number of weekday days:", len(weekday_sample))
+print("Number of weekend days:", len(weekend_sample))
+
+'''
+Interpretation:
+---------------
+We now have two comparable samples:
+
+• weekday_sample → crime counts for each weekday in 2024 (261 days)
+• weekend_sample → crime counts for each weekend day in 2024 (104 days)
+
+These samples allow a correct two-sample test on DAILY crime levels,
+instead of comparing raw totals.
+'''
+
+###########################################################
+## Welch’s t-test: Do weekday and weekend crime differ?  ##
+###########################################################
+
+t_stat, p_value = stats.ttest_ind(
+    weekday_sample,
+    weekend_sample,
+    equal_var=False   # Welch’s test handles unequal variances & sample sizes
+)
+
+print("t-statistic:", t_stat)
+print("p-value:", p_value)
+
+'''
+Interpretation:
+---------------
+Hypotheses:
+H0: Mean daily crime is the same on weekdays and weekends.
+H1: Mean daily crime is different.
+
+Result:
+• t ≈ 0.0678
+• p ≈ 0.9460  (very large)
+
+Decision (α = 0.05):
+• p > 0.05 → fail to reject H0.
+
+Conclusion:
+-----------
+There is **no statistically significant difference** in daily crime levels
+between weekdays and weekends in Los Angeles during 2024.
+
+Even though weekday totals are higher, the *per-day* crime rate is nearly
+identical — and the statistical test confirms there is no meaningful difference.
+'''
+
