@@ -244,5 +244,49 @@ print(rising['trend'])
 print("\nTop 10 declining crime types (change from start to end of year):")
 print(falling['trend'])
 
+# %%
+# SIGNIFICANCE TESTING FOR MONTHLY TRENDS (KENDALL'S TAU TEST)
 
+from scipy.stats import kendalltau
+
+trend_tests = []
+
+for crime in crime_monthly['crm_cd_desc'].unique():
+
+    subset = crime_monthly[crime_monthly['crm_cd_desc'] == crime].sort_values('month')
+
+    # Must have at least 3 points to detect a trend
+    if subset['month'].nunique() < 3:
+        continue
+
+    # Perform Kendall's Tau trend test
+    tau, p_val = kendalltau(subset['month'], subset['count'])
+
+    trend_tests.append({
+        'crime_type': crime,
+        'tau': tau,
+        'p_value': p_val,
+        'trend_direction': "Increasing" if tau > 0 else "Decreasing",
+        'significant': "YES" if p_val < 0.05 else "NO"
+    })
+
+trend_tests_df = pd.DataFrame(trend_tests)
+
+significant_increases = (
+    trend_tests_df[(trend_tests_df['significant']=="YES") & (trend_tests_df['tau']>0)]
+    .sort_values('tau', ascending=False)
+    .head(10)
+)
+
+significant_decreases = (
+    trend_tests_df[(trend_tests_df['significant']=="YES") & (trend_tests_df['tau']<0)]
+    .sort_values('tau')
+    .head(10)
+)
+
+print("\n================ SIGNIFICANT INCREASING TRENDS (Kendall's Tau) ================")
+print(significant_increases)
+
+print("\n================ SIGNIFICANT DECREASING TRENDS (Kendall's Tau) ================")
+print(significant_decreases)
 # %%
