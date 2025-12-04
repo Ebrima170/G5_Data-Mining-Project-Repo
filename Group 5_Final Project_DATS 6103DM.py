@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, roc_auc_score
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -160,7 +161,7 @@ print("Datetime variables:", datetime_vars)
 # ============================================================
 # 10. SAFE plotting (skip empty plots)
 # ============================================================
-'''
+
 for col in categorical_vars:
     if col not in data.columns:
         print(f"Skipping missing column: {col}")
@@ -202,7 +203,7 @@ for col in datetime_vars:
         plt.ylabel("Count")
         plt.tight_layout()
         plt.show() 
-     '''  
+      
 #EDA is commented out to avoid long plotting times 
 '''
 EDA plots show the distributions and trends of key variables. 
@@ -269,9 +270,6 @@ The result of the chi-square test shows that there is a significant difference i
    Further investigation into these factors could provide insights into targeted crime prevention strategies. 
 '''
 #%%[markdown]
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-
 
 #b. Modeling (What factors explain crime probability or crime intensity?)
 # ============================================================
@@ -403,5 +401,256 @@ print(falling['trend'])
 print(data.head())
 print(data.info())
 
+##%%[]
+
+#Muhannad's Question
+# ============================================================
+############################################################
+# STANDARDIZE COLUMN NAMES (REQUIRED FOR THIS BLOCK)
+############################################################
+
+data = data.rename(columns=lambda x: x.strip().lower())
+df_clean = data.copy()   # ensures compatibility with your previous code
+
+# Ensure key fields exist
+required_cols = ["date_occ", "time_occ", "crm_cd_desc", "area_name"]
+for col in required_cols:
+    if col not in df_clean.columns:
+        df_clean[col] = None
+
+
+############################################################
+# FEATURE ENGINEERING
+############################################################
+
+# Convert date column to datetime
+df_clean["date_occ"] = pd.to_datetime(df_clean["date_occ"], errors="coerce")
+
+# Day of week
+df_clean["day_of_week_num"] = df_clean["date_occ"].dt.dayofweek
+df_clean["day_of_week"] = df_clean["date_occ"].dt.day_name()
+
+# Weekend indicator
+df_clean["is_weekend"] = df_clean["day_of_week_num"].isin([5, 6]).astype(int)
+
+# Hour of day
+df_clean["time_occ"] = pd.to_numeric(df_clean["time_occ"], errors="coerce")
+df_clean["hour"] = (df_clean["time_occ"] // 100).astype("Int64")
+
+# Time-of-day category
+def time_of_day_from_hour(h):
+    if pd.isna(h):
+        return "Unknown"
+    elif 0 <= h <= 5:
+        return "Night"
+    elif 6 <= h <= 11:
+        return "Morning"
+    elif 12 <= h <= 17:
+        return "Afternoon"
+    else:
+        return "Evening"
+
+df_clean["time_of_day"] = df_clean["hour"].apply(time_of_day_from_hour)
+
+# Rush hour indicator
+df_clean["is_rush_hour"] = df_clean["hour"].isin([7, 8, 9, 16, 17, 18]).astype(int)
+
+# Month and season
+df_clean["month_num"] = df_clean["date_occ"].dt.month
+df_clean["month_name"] = df_clean["date_occ"].dt.month_name()
+
+def month_to_season(m):
+    if m in [12, 1, 2]:
+        return "Winter"
+    elif m in [3, 4, 5]:
+        return "Spring"
+    elif m in [6, 7, 8]:
+        return "Summer"
+    else:
+        return "Fall"
+
+df_clean["season"] = df_clean["month_num"].apply(month_to_season)
+
+# Holiday indicator
+holiday_dates = pd.to_datetime([
+    "2024-01-01", "2024-01-15", "2024-02-19", "2024-05-27",
+    "2024-07-04", "2024-09-02", "2024-10-14",
+    "2024-11-11", "2024-11-28", "2024-12-25"
+]).normalize()
+
+df_clean["is_holiday"] = df_clean["date_occ"].dt.normalize().isin(holiday_dates).astype(int)
+
+
+############################################################
+# EXPLORATORY DATA ANALYSIS (EDA)
+############################################################
+
+sns.set(style="whitegrid")
+
+###############################
+# Overview
+###############################
+print("Number of cleaned records:", df_clean.shape[0])
+
+
+############################################################
+# Crime Frequency (Top Crime Types)
+############################################################
+top10 = df_clean["crm_cd_desc"].value_counts().head(10)
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x=top10.values, y=top10.index)
+plt.xlabel("Number of Incidents")
+plt.ylabel("Crime Type")
+plt.title("Top 10 Most Frequent Crime Types in 2024")
+plt.tight_layout()
+plt.show()
+
+
+############################################################
+# Crime by Day of Week
+############################################################
+order_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+plt.figure(figsize=(8, 5))
+sns.countplot(data=df_clean, x="day_of_week", order=order_days)
+plt.xlabel("Day of Week")
+plt.ylabel("Number of Incidents")
+plt.title("Number of Crimes by Day of Week")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+
+############################################################
+# Weekday vs Weekend Crimes
+############################################################
+plt.figure(figsize=(6, 4))
+sns.countplot(x=df_clean["is_weekend"].map({0: "Weekday", 1: "Weekend"}))
+plt.xlabel("Day Type")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes on Weekdays vs Weekends")
+plt.tight_layout()
+plt.show()
+
+
+############################################################
+# Crime by Hour of the Day
+############################################################
+plt.figure(figsize=(10, 5))
+sns.countplot(data=df_clean, x="hour")
+plt.xlabel("Hour (0–23)")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes by Hour of Day")
+plt.tight_layout()
+plt.show()
+
+
+############################################################
+# Crime by Time-of-Day Category
+############################################################
+plt.figure(figsize=(7, 4))
+sns.countplot(
+    data=df_clean,
+    x="time_of_day",
+    order=["Night", "Morning", "Afternoon", "Evening", "Unknown"]
+)
+plt.xlabel("Time of Day")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes by Time of Day")
+plt.tight_layout()
+plt.show()
+
+
+############################################################
+# Crime by Month
+############################################################
+order_months = ["January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"]
+
+plt.figure(figsize=(10, 5))
+sns.countplot(data=df_clean, x="month_name", order=order_months)
+plt.xlabel("Month")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes by Month in 2024")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+
+############################################################
+# Crime by Season
+############################################################
+plt.figure(figsize=(6, 4))
+sns.countplot(data=df_clean, x="season",
+              order=["Winter", "Spring", "Summer", "Fall"])
+plt.xlabel("Season")
+plt.ylabel("Number of Incidents")
+plt.title("Crimes by Season in 2024")
+plt.tight_layout()
+plt.show()
+
+
+############################################################
+# Holiday vs Non-Holiday Crimes
+############################################################
+plt.figure(figsize=(6, 4))
+sns.countplot(x=df_clean["is_holiday"].map({0: "Non-Holiday", 1: "Holiday"}))
+plt.xlabel("Day Type")
+plt.ylabel("Crimes")
+plt.title("Crimes on Holidays vs Non-Holidays")
+plt.tight_layout()
+plt.show()
+
+
+############################################################
+# Crime by LAPD Area
+############################################################
+if "area_name" in df_clean.columns:
+    area_counts = df_clean["area_name"].value_counts().head(10)
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x=area_counts.values, y=area_counts.index)
+    plt.xlabel("Number of Incidents")
+    plt.ylabel("Area Name")
+    plt.title("Top 10 LAPD Areas by Crime Count (2024)")
+    plt.tight_layout()
+    plt.show()
+
+
+############################################################
+# Statistical Test: Weekday vs Weekend
+############################################################
+from scipy import stats
+
+weekday_total = df_clean[df_clean["is_weekend"] == 0].shape[0]
+weekend_total = df_clean[df_clean["is_weekend"] == 1].shape[0]
+
+# Count weekday/weekend days in the year
+days_2024 = pd.date_range("2024-01-01", "2024-12-31")
+num_weekdays = sum(days_2024.weekday < 5)
+num_weekend_days = sum(days_2024.weekday >= 5)
+
+weekday_avg = weekday_total / num_weekdays
+weekend_avg = weekend_total / num_weekend_days
+
+# Daily samples
+daily_counts = df_clean.groupby(df_clean["date_occ"].dt.date).size()
+weekday_sample = daily_counts[pd.to_datetime(daily_counts.index).weekday < 5]
+weekend_sample = daily_counts[pd.to_datetime(daily_counts.index).weekday >= 5]
+
+# Welch's t-test
+t_stat, p_value = stats.ttest_ind(
+    weekday_sample,
+    weekend_sample,
+    equal_var=False
+)
+
+print("Weekday vs Weekend Welch t-test:")
+print("t-statistic:", t_stat)
+print("p-value:", p_value)
+if p_value < 0.05:
+    print("Result: Significant difference in daily crime counts (reject H0).")
+else:
+    print("Result: No significant difference in daily crime counts (fail to reject H0).")
 
 
