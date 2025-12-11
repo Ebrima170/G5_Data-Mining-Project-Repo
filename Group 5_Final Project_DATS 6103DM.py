@@ -179,9 +179,152 @@ for col in datetime_vars:
         plt.show()
 
 
-#%%[markdown]
+
 #============================================================
-# 12. SMART QUESTION 1 — HIGHEST CRIME AREAS
+#Harshith's Question
+# 15. SMART QUESTION 1 — CRIME TRENDS BY MONTH
+#============================================================
+# %%[markdown]
+ #3: Which crime types showed the sharpest increases or decreases in 2024?
+
+data['date_occ'] = pd.to_datetime(data['date_occ'], errors='coerce')
+data = data[data['date_occ'].notna()].copy()
+data['month'] = data['date_occ'].dt.month
+
+crime_monthly = (
+    data.groupby(['crm_cd_desc', 'month'])
+        .size()
+        .reset_index(name='count')
+)
+
+top_crimes = (
+    data['crm_cd_desc']
+        .value_counts()
+        .head(10)
+        .index
+)
+
+crime_monthly_top = crime_monthly[crime_monthly['crm_cd_desc'].isin(top_crimes)]
+filtered_monthly = crime_monthly[
+    crime_monthly['crm_cd_desc'].isin(top_crimes)
+]
+
+plt.figure(figsize=(14, 8))
+sns.lineplot(
+    data=filtered_monthly,
+    x='month',
+    y='count',
+    hue='crm_cd_desc',
+    marker='o'
+)
+plt.xticks(range(1, 13))
+plt.xlabel('Month')
+plt.ylabel('Number of crimes')
+plt.title('Monthly Crime Trends for Top 10 Crime Categories in 2024')
+plt.legend(title='Crime Type', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
+
+trend_pivot = crime_monthly.pivot(index='crm_cd_desc', columns='month', values='count').fillna(0)
+
+if 1 in trend_pivot.columns and 12 in trend_pivot.columns:
+    trend_pivot['trend'] = trend_pivot[12] - trend_pivot[1]
+else:
+    first_col = trend_pivot.columns.min()
+    last_col = trend_pivot.columns.max()
+    trend_pivot['trend'] = trend_pivot[last_col] - trend_pivot[first_col]
+
+rising = trend_pivot.sort_values('trend', ascending=False).head(10)
+falling = trend_pivot.sort_values('trend', ascending=True).head(10)
+
+print("Top 10 rising crime types (change from start to end of year):")
+print(rising['trend'])
+
+print("\nTop 10 declining crime types (change from start to end of year):")
+print(falling['trend'])
+#=============
+
+print(data.head())
+print(data.info())
+
+# %%
+# SIGNIFICANCE TESTING FOR MONTHLY TRENDS (KENDALL'S TAU TEST)
+trend_pivot = (
+    crime_monthly
+    .pivot(index='crm_cd_desc', columns='month', values='count')
+    .fillna(0)
+)
+
+from scipy.stats import kendalltau
+trend_pivot['trend'] = trend_pivot.max(axis=1) - trend_pivot.min(axis=1)
+
+trend_tests = []
+print("\nTop rising crime types:")
+print(trend_pivot['trend'].sort_values(ascending=False).head(10))
+
+#%%[markdown]
+# KENDALL TREND TEST
+trend_stats = []
+
+for crime in crime_monthly['crm_cd_desc'].unique():
+
+    # Subset and sort by month
+    subset = crime_monthly[crime_monthly['crm_cd_desc'] == crime].sort_values('month')
+
+    # Must have at least 3 unique months to detect a trend
+    if subset['month'].nunique() < 3:
+        continue
+
+    # Kendall's Tau test
+    tau, p_val = kendalltau(subset['month'], subset['count'])
+
+    trend_stats.append({
+        'crime_type': crime,
+        'tau': tau,
+        'p_value': p_val,
+        'trend': "Increasing" if tau > 0 else "Decreasing",
+        'significant': p_val < 0.05
+    })
+
+# Convert to DataFrame
+trend_df = pd.DataFrame(trend_stats)
+
+# Significant increasing trends
+significant_increases = (
+    trend_df[(trend_df['significant']) & (trend_df['tau'] > 0)]
+    .sort_values('tau', ascending=False)
+    .head(10)
+)
+
+# Significant decreasing trends
+significant_decreases = (
+    trend_df[(trend_df['significant']) & (trend_df['tau'] < 0)]
+    .sort_values('tau')
+    .head(10)
+)
+
+print("\n================ SIGNIFICANT INCREASING TRENDS (Kendall's Tau) ================")
+print(significant_increases)
+
+print("\n================ SIGNIFICANT DECREASING TRENDS (Kendall's Tau) ================")
+print(significant_decreases)
+
+print("\nSignificant Increasing Trends:")
+print(significant_increases)
+
+print("\nSignificant Decreasing Trends:")
+print(significant_decreases)
+
+'''
+The Kendall trend test identifies crime types with statistically significant increasing or decreasing trends over the months.
+This helps highlight which crimes are becoming more or less prevalent, guiding resource allocation and prevention strategies.
+'''
+
+#%%[markdown]
+#Which areas have the highest crime concentrations in 2024? 
+#And which factors best explain these high-crime areas?
+#============================================================
+# 12. SMART QUESTION 2 — HIGHEST CRIME AREAS - Ebrima
 #============================================================
 #============================================================
 crime_counts = (
@@ -212,6 +355,10 @@ plt.ylabel("Area Name")
 plt.tight_layout()
 plt.show()
 
+'''
+The bar chart above shows the top 10 areas in Los Angeles with the highest crime counts in 2024.
+This visualization helps identify hotspots for crime, which can inform resource allocation and prevention strategies.
+Southwest Los Angeles, Central Los Angeles, and Pacific Los Angeles are among the areas with the highest crime rates in 2024.'''
 
 #%%[markdown]
 #============================================================
@@ -224,11 +371,16 @@ if "part_1_2" in data.columns:
     print("\nChi-Squared Results:")
     print(f"Chi2 = {chi2}, p = {p}, dof = {dof}")
 
+'''
+The chi-square test indicates a significant association between area and crime seriousness.
+This suggests that certain areas may experience different levels of serious vs non-serious crimes.
+'''
+
 #%%[markdown]
 #============================================================
 # MODELING: CRIME INTENSITY EXPLAINED BY AREA FEATURES
 #============================================================
-
+# FEATURE ENGINEERING — AREA-LEVEL AGGREGATES
 area_df = (
     data.groupby("area_name")
         .agg(
@@ -244,6 +396,8 @@ area_df = (
         .dropna()
         .reset_index()
 )
+
+# RANDOM FOREST REGRESSOR
 
 X = area_df.drop(columns=["crime_count", "area_name"])
 y = area_df["crime_count"]
@@ -319,7 +473,7 @@ Though negative binomial perform better, both models highlight the complexity of
 '''
 #%%[markdown]
 #============================================================
-# 13. SMART QUESTION 2 — TEMPORAL PATTERNS
+# 13. SMART QUESTION 3 — TEMPORAL PATTERNS
 #============================================================
 '''
 SMART Question:  
@@ -378,8 +532,6 @@ def time_category(h):
     return "Evening"
 
 df_time["time_of_day"] = df_time["hour"].apply(time_category)
-
-
 
 
 #%%[markdown]
@@ -514,97 +666,25 @@ between weekdays and weekends.
 
 #%%[markdown]
 #============================================================
-# Summary of SMART Question 2
+# Summary of SMART Question 3 Findings
 #============================================================
 
 '''
 Daily crime levels: NOT significantly different  
 Hourly averages: NOT significantly different  
 Time-of-day distribution: SIGNIFICANTLY different  
-
-Conclusion:
+'''
+#Conclusion
+'''
 The difference between weekday and weekend crime is not about volume,
 but *when during the day* the crimes occur.
 '''
-#%%[markdown]
-#============================================================
-# 14. SMART Question 3 — CRIME TRENDS BY MONTH
 #============================================================
 
-data['date_occ'] = pd.to_datetime(data['date_occ'], errors='coerce')
-data['month'] = data['date_occ'].dt.month
-
-crime_monthly = (
-    data.groupby(['crm_cd_desc','month']).size().reset_index(name='count')
-)
-
-top_crimes = (
-    data['crm_cd_desc'].value_counts().head(10).index
-)
-
-filtered_monthly = crime_monthly[
-    crime_monthly['crm_cd_desc'].isin(top_crimes)
-]
-
-plt.figure(figsize=(14, 8))
-sns.lineplot(
-    data=filtered_monthly,
-    x='month',
-    y='count',
-    hue='crm_cd_desc',
-    marker='o'
-)
-plt.xticks(range(1, 13))
-plt.tight_layout()
-plt.show()
-
-trend_pivot = (
-    crime_monthly
-    .pivot(index='crm_cd_desc', columns='month', values='count')
-    .fillna(0)
-)
-
-trend_pivot['trend'] = trend_pivot.max(axis=1) - trend_pivot.min(axis=1)
-
-print("\nTop rising crime types:")
-print(trend_pivot['trend'].sort_values(ascending=False).head(10))
-
-#%%[markdown]
-# KENDALL TREND TEST
-trend_stats = []
-for crime in crime_monthly['crm_cd_desc'].unique():
-    subset = crime_monthly[crime_monthly['crm_cd_desc']==crime]
-    if subset['month'].nunique() < 3:
-        continue
-    tau, p_val = kendalltau(subset['month'], subset['count'])
-    trend_stats.append({
-        'crime_type': crime,
-        'tau': tau,
-        'p_value': p_val,
-        'trend': "Increasing" if tau>0 else "Decreasing",
-        'significant': p_val < 0.05
-    })
-
-trend_df = pd.DataFrame(trend_stats)
-
-print("\nSignificant Increasing Trends:")
-print(trend_df[(trend_df['significant']) & (trend_df['tau']>0)]
-      .sort_values('tau', ascending=False).head(10))
-
-print("\nSignificant Decreasing Trends:")
-print(trend_df[(trend_df['significant']) & (trend_df['tau']<0)]
-      .sort_values('tau').head(10))
-'''
-The Kendall trend test identifies crime types with statistically significant increasing or decreasing trends over the months.
-This helps highlight which crimes are becoming more or less prevalent, guiding resource allocation and prevention strategies.
-'''
 #%%[markdown]
 #============================================================
 print("\nALL ANALYSIS COMPLETE.")
 
-# %%
-#############################################################
-# %%
 #END OF PROJECT WORK 
 #############################################################
 # ============================================================
