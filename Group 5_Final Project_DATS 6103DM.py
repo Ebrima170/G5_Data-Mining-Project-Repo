@@ -44,7 +44,7 @@ from scipy.stats import chi2_contingency, kendalltau
 #============================================================
 
 data = pd.read_excel(
-    'C:/Users/Ebrima/Documents/GitHub/G5_Data-Mining-Project-Repo/Crime_Data_LA_2024.xlsx'
+    'Crime_Data_LA_2024.xlsx'
 )
 print("\nRaw data loaded:")
 print(data.head())
@@ -215,7 +215,7 @@ plt.show()
 
 #%%[markdown]
 #============================================================
-# 13. CHI-SQUARE TEST: CRIME SERIOUSNESS × AREA
+# CHI-SQUARE TEST: CRIME SERIOUSNESS × AREA
 #============================================================
 if "part_1_2" in data.columns:
     contingency = pd.crosstab(data['area_name'], data['part_1_2'])
@@ -226,7 +226,7 @@ if "part_1_2" in data.columns:
 
 #%%[markdown]
 #============================================================
-# 14. MODELING: CRIME INTENSITY EXPLAINED BY AREA FEATURES
+# MODELING: CRIME INTENSITY EXPLAINED BY AREA FEATURES
 #============================================================
 
 area_df = (
@@ -315,10 +315,220 @@ plt.show()
 The Negative Binomial Regression model provides interpretable rate ratios for each predictor.
 The pseudo R² indicates a modest explanatory power, suggesting that while area features contribute to crime intensity, 
 other unmeasured factors likely play significant roles.
-Though negative binomial perform better, both models highlight the complexity of crime dynamics and the need for more comprehensive data to improve predictions.'''
+Though negative binomial perform better, both models highlight the complexity of crime dynamics and the need for more comprehensive data to improve predictions.
+'''
 #%%[markdown]
 #============================================================
-# 15. HARSHITH'S QUESTION — CRIME TRENDS BY MONTH
+# 13. SMART QUESTION 2 — TEMPORAL PATTERNS
+#============================================================
+'''
+SMART Question:  
+Do crime incidents differ significantly between weekdays and weekends in Los Angeles during 2024? 
+If differences exist, are they mainly about how much crime happens,  
+or when during the day crime occurs?
+'''
+#%%
+df_time = data.copy()
+
+# Keep only crimes from 2024
+df_time = df_time[df_time["date_occ"].dt.year == 2024]
+print("Rows in 2024 subset:", df_time.shape[0])
+#because the date_rptd contains crimes occurred in previous years but reported in 2024
+
+#%%[markdown]
+#============================================================
+# Clean TIME_OCC properly
+#============================================================
+'''
+We must ensure time_occ is valid HHMM format.
+Remove missing times and times with invalid minutes (>= 60).
+'''
+
+# Convert to numeric
+df_time["time_occ"] = pd.to_numeric(df_time["time_occ"], errors="coerce")
+
+# Remove rows with missing times
+df_time = df_time.dropna(subset=["time_occ"])
+
+# Remove invalid minutes (HH**MM** where MM >= 60)
+valid_time = (df_time["time_occ"] % 100) < 60
+df_time = df_time[valid_time]
+
+# Extract hour (0–23)
+df_time["hour"] = (df_time["time_occ"] // 100).astype(int)
+
+print("Rows after cleaning time:", df_time.shape[0])
+
+
+#%%[markdown]
+#============================================================
+# FEATURE ENGINEERING — TEMPORAL VARIABLES
+#============================================================
+
+# Day-of-week features
+df_time["day_num"] = df_time["date_occ"].dt.dayofweek
+df_time["day_of_week"] = df_time["date_occ"].dt.day_name()
+df_time["is_weekend"] = df_time["day_num"].isin([5,6]).astype(int)
+
+# Time-of-day category
+def time_category(h):
+    if 0 <= h <= 5: return "Night"
+    if 6 <= h <= 11: return "Morning"
+    if 12 <= h <= 17: return "Afternoon"
+    return "Evening"
+
+df_time["time_of_day"] = df_time["hour"].apply(time_category)
+
+
+
+
+#%%[markdown]
+#============================================================
+# EDA — CRIME BY DAY OF WEEK
+#============================================================
+plt.figure(figsize=(8,5))
+sns.countplot(
+    data=df_time,
+    x="day_of_week",
+    order=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+)
+plt.title("Crimes by Day of Week (2024)")
+plt.tight_layout()
+plt.show()
+
+
+#%%[markdown]
+#============================================================
+# STATISTICAL TEST — DAILY CRIME LEVELS (WELCH'S T-TEST)
+#============================================================
+'''
+Does the daily number of crimes differ between weekdays and weekends?
+'''
+
+from scipy import stats
+
+# Daily crime counts
+daily_counts = df_time.groupby(df_time["date_occ"].dt.date).size()
+
+weekday_daily = daily_counts[pd.to_datetime(daily_counts.index).weekday < 5]
+weekend_daily = daily_counts[pd.to_datetime(daily_counts.index).weekday >= 5]
+
+t_stat, p_val = stats.ttest_ind(
+    weekday_daily, weekend_daily, equal_var=False
+)
+
+print("\nWelch t-test (Daily Crime Levels):")
+print("t-statistic:", t_stat)
+print("p-value:", p_val)
+
+# Interpretation
+'''
+Daily crime levels do NOT differ significantly between weekdays and weekends.
+'''
+
+
+#%%[markdown]
+#============================================================
+# EDA — HOURLY CRIME PATTERNS
+#============================================================
+hourly_counts = df_time.groupby(["hour","is_weekend"]).size().reset_index(name="count")
+hourly_counts["day_type"] = hourly_counts["is_weekend"].map({0:"Weekday",1:"Weekend"})
+
+plt.figure(figsize=(12,6))
+sns.lineplot(
+    data=hourly_counts,
+    x="hour", y="count",
+    hue="day_type", marker="o"
+)
+plt.title("Crime Volume by Hour (Weekday vs Weekend)")
+plt.xticks(range(0,24))
+plt.tight_layout()
+plt.show()
+
+
+#%%[markdown]
+#============================================================
+# STATISTICAL TEST — HOURLY CRIME LEVELS (WELCH'S T-TEST)
+#============================================================
+
+hourly_daily = df_time.groupby(
+    [df_time["date_occ"].dt.date, "hour"]
+).size().reset_index(name="count")
+
+weekday_hour = hourly_daily[pd.to_datetime(hourly_daily["date_occ"]).dt.weekday < 5]["count"]
+weekend_hour = hourly_daily[pd.to_datetime(hourly_daily["date_occ"]).dt.weekday >= 5]["count"]
+
+t_stat2, p_val2 = stats.ttest_ind(
+    weekday_hour, weekend_hour, equal_var=False
+)
+
+print("\nWelch t-test (Hourly Crime Levels):")
+print("t-statistic:", t_stat2)
+print("p-value:", p_val2)
+
+# Interpretation
+'''
+Hourly averages also do NOT differ significantly between weekdays and weekends.
+'''
+
+
+#%%[markdown]
+#============================================================
+# EDA — TIME-OF-DAY CATEGORY DISTRIBUTIONS
+#============================================================
+order_tod = ["Night","Morning","Afternoon","Evening"]
+
+plt.figure(figsize=(10,6))
+sns.countplot(
+    data=df_time,
+    x="time_of_day",
+    order=order_tod,
+    hue="is_weekend",
+    palette={0:"#4c72b0", 1:"#dd8452"}
+)
+plt.title("Crimes by Time-of-Day Category (2024)")
+plt.tight_layout()
+plt.show()
+
+
+#%%[markdown]
+#============================================================
+# STATISTICAL TEST — TIME-OF-DAY × WEEKEND (CHI-SQUARE)
+#============================================================
+from scipy.stats import chi2_contingency
+
+contingency = pd.crosstab(df_time["time_of_day"], df_time["is_weekend"])
+chi2, p, dof, expected = chi2_contingency(contingency)
+
+print("\nChi-Square Test (Time-of-Day × Weekend):")
+print("Chi-square:", chi2)
+print("p-value:", p)
+print("Degrees of freedom:", dof)
+
+# Interpretation
+'''
+There IS a statistically significant difference in crime timing across the day
+between weekdays and weekends.
+'''
+
+
+#%%[markdown]
+#============================================================
+# Summary of SMART Question 2
+#============================================================
+
+'''
+Daily crime levels: NOT significantly different  
+Hourly averages: NOT significantly different  
+Time-of-day distribution: SIGNIFICANTLY different  
+
+Conclusion:
+The difference between weekday and weekend crime is not about volume,
+but *when during the day* the crimes occur.
+'''
+#%%[markdown]
+#============================================================
+# 14. SMART Question 3 — CRIME TRENDS BY MONTH
 #============================================================
 
 data['date_occ'] = pd.to_datetime(data['date_occ'], errors='coerce')
@@ -389,122 +599,6 @@ The Kendall trend test identifies crime types with statistically significant inc
 This helps highlight which crimes are becoming more or less prevalent, guiding resource allocation and prevention strategies.
 '''
 #%%[markdown]
-#============================================================
-# 16. MUHANNAD’S QUESTION — TEMPORAL PATTERNS
-#============================================================
-
-df = data.copy()
-df['day_of_week'] = df['date_occ'].dt.day_name()
-df['day_num'] = df['date_occ'].dt.dayofweek
-df['is_weekend'] = df['day_num'].isin([5,6]).astype(int)
-
-df['hour'] = (df['time_occ'].astype(float) // 100).astype("Int64")
-
-def time_category(h):
-    if pd.isna(h): return "Unknown"
-    if 0 <= h <= 5: return "Night"
-    if 6 <= h <= 11: return "Morning"
-    if 12 <= h <= 17: return "Afternoon"
-    return "Evening"
-
-df['time_of_day'] = df['hour'].apply(time_category)
-
-df['month'] = df['date_occ'].dt.month
-df['month_name'] = df['date_occ'].dt.month_name()
-
-def season(m):
-    if m in [12,1,2]: return "Winter"
-    if m in [3,4,5]: return "Spring"
-    if m in [6,7,8]: return "Summer"
-    return "Fall"
-
-df['season'] = df['month'].apply(season)
-
-holiday_dates = pd.to_datetime([
-    "2024-01-01","2024-01-15","2024-02-19","2024-05-27",
-    "2024-07-04","2024-09-02","2024-10-14",
-    "2024-11-11","2024-11-28","2024-12-25"
-])
-
-df['is_holiday'] = df['date_occ'].dt.normalize().isin(holiday_dates).astype(int)
-
-# Plot: Crime by Day of Week
-plt.figure(figsize=(8,5))
-sns.countplot(data=df, x='day_of_week',
-              order=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'])
-plt.tight_layout()
-plt.show()
-
-# Plot: Crime by Time of Day
-plt.figure(figsize=(8,5))
-sns.countplot(data=df, x='time_of_day',
-              order=['Night','Morning','Afternoon','Evening','Unknown'])
-plt.tight_layout()
-plt.show()
-
-# Plot: Month Patterns
-plt.figure(figsize=(10,5))
-sns.countplot(
-    data=df, 
-    x='month_name',
-    order=['January','February','March','April','May','June','July','August',
-           'September','October','November','December']
-)
-plt.tight_layout()
-plt.show()
-
-#%%[markdown]
-from scipy import stats
-
-weekday_total = df[df["is_weekend"] == 0].shape[0]
-weekend_total = df[df["is_weekend"] == 1].shape[0]
-
-# Count weekday/weekend days in the year
-days_2024 = pd.date_range("2024-01-01", "2024-12-31")
-num_weekdays = sum(days_2024.weekday < 5)
-num_weekend_days = sum(days_2024.weekday >= 5)
-weekday_avg = weekday_total / num_weekdays
-weekend_avg = weekend_total / num_weekend_days
-
-# Daily samples
-daily_counts = df.groupby(df["date_occ"].dt.date).size()
-weekday_sample = daily_counts[pd.to_datetime(daily_counts.index).weekday < 5]
-weekend_sample = daily_counts[pd.to_datetime(daily_counts.index).weekday >= 5]
-
-# Welch's t-test
-t_stat, p_value = stats.ttest_ind(
-    weekday_sample,
-    weekend_sample,
-    equal_var=False
-)
-
-print("Weekday vs Weekend Welch t-test:")
-print("t-statistic:", t_stat)
-print("p-value:", p_value)
-
-
-# %%[markdown]
-#Interpretation:
-
-'''Hypotheses:
-H0: Mean daily crime is the same on weekdays and weekends.
-H1: Mean daily crime is different.
-
-Result:
-• t ≈ -0.7854  (small)
-• p ≈ 0.4328  (very large)
-
-Decision (α = 0.05):
-• p > 0.05 → fail to reject H0.
-'''
-#Conclusion:
-
-'''There is no statistically significant difference in daily crime levels
-between weekdays and weekends in Los Angeles during 2024.
-
-Even though weekday totals are higher, the *per-day* crime rate is nearly
-identical — and the statistical test confirms there is no meaningful difference.
-'''
 #============================================================
 print("\nALL ANALYSIS COMPLETE.")
 
