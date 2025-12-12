@@ -182,10 +182,10 @@ for col in datetime_vars:
 
 #============================================================
 #Harshith's Question
-# 15. SMART QUESTION 1 — CRIME TRENDS BY MONTH
+# 12. SMART QUESTION 1 — CRIME TRENDS BY MONTH
 #============================================================
 # %%[markdown]
- #3: Which crime types showed the sharpest increases or decreases in 2024?
+ # Which crime types showed the sharpest increases or decreases in 2024?
 
 data['date_occ'] = pd.to_datetime(data['date_occ'], errors='coerce')
 data = data[data['date_occ'].notna()].copy()
@@ -324,7 +324,7 @@ This helps highlight which crimes are becoming more or less prevalent, guiding r
 #Which areas have the highest crime concentrations in 2024? 
 #And which factors best explain these high-crime areas?
 #============================================================
-# 12. SMART QUESTION 2 — HIGHEST CRIME AREAS - Ebrima
+# 13. SMART QUESTION 2 — HIGHEST CRIME AREAS - Ebrima
 #============================================================
 #============================================================
 crime_counts = (
@@ -473,7 +473,7 @@ Though negative binomial perform better, both models highlight the complexity of
 '''
 #%%[markdown]
 #============================================================
-# 13. SMART QUESTION 3 — TEMPORAL PATTERNS
+# 14. SMART QUESTION 3 — TEMPORAL PATTERNS - Muhannad
 #============================================================
 '''
 SMART Question:  
@@ -547,6 +547,39 @@ sns.countplot(
 plt.title("Crimes by Day of Week (2024)")
 plt.tight_layout()
 plt.show()
+
+# Compute total crimes on weekdays vs weekends
+weekday_total = df_time[df_time["is_weekend"] == 0].shape[0]
+weekend_total = df_time[df_time["is_weekend"] == 1].shape[0]
+
+# Count the number of weekday and weekend days in 2024
+days_2024 = pd.date_range("2024-01-01", "2024-12-31")
+num_weekdays = sum(days_2024.weekday < 5)
+num_weekend_days = sum(days_2024.weekday >= 5)
+
+# Compute averages
+weekday_avg = weekday_total / num_weekdays
+weekend_avg = weekend_total / num_weekend_days
+
+# Plot average crimes per day: Weekday vs Weekend
+avg_data = pd.DataFrame({
+    "Day Type": ["Weekday", "Weekend"],
+    "Average Crimes Per Day": [weekday_avg, weekend_avg]
+})
+
+plt.figure(figsize=(7,5))
+sns.barplot(
+    data=avg_data,
+    x="Day Type",
+    y="Average Crimes Per Day",
+    palette=["#4c72b0", "#dd8452"]
+)
+plt.title("Average Crimes Per Day: Weekday vs Weekend")
+plt.ylabel("Average Number of Crimes")
+plt.xlabel("")
+plt.tight_layout()
+plt.show()
+
 
 
 #%%[markdown]
@@ -692,3 +725,5 @@ print("\nALL ANALYSIS COMPLETE.")
 
 
 
+
+# %%
