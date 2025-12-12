@@ -692,7 +692,7 @@ print("Degrees of freedom:", dof)
 
 # Interpretation
 '''
-There IS a statistically significant difference in crime timing across the day
+There is a statistically significant difference in crime timing across the day
 between weekdays and weekends.
 '''
 
