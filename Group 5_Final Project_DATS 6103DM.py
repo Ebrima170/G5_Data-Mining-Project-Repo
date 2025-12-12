@@ -181,8 +181,7 @@ for col in datetime_vars:
 
 
 #============================================================
-#Harshith's Question
-# 12. SMART QUESTION 1 — CRIME TRENDS BY MONTH
+# 12. SMART QUESTION 1 — CRIME TRENDS BY MONTH - Harshith
 #============================================================
 # %%[markdown]
  # Which crime types showed the sharpest increases or decreases in 2024?
